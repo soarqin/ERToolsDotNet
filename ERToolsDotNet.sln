@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DropRateTweaker", "DropRateTweaker\DropRateTweaker.csproj", "{7043E00C-2E3A-4F3A-8FCF-173314B9EF58}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoulsFormats", "SoulsFormats\SoulsFormats.csproj", "{53B2BE29-181A-4A09-B02D-2811B2F20823}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7043E00C-2E3A-4F3A-8FCF-173314B9EF58}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7043E00C-2E3A-4F3A-8FCF-173314B9EF58}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7043E00C-2E3A-4F3A-8FCF-173314B9EF58}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7043E00C-2E3A-4F3A-8FCF-173314B9EF58}.Release|Any CPU.Build.0 = Release|Any CPU
+		{53B2BE29-181A-4A09-B02D-2811B2F20823}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53B2BE29-181A-4A09-B02D-2811B2F20823}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53B2BE29-181A-4A09-B02D-2811B2F20823}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53B2BE29-181A-4A09-B02D-2811B2F20823}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

@@ -1,5 +1,4 @@
-﻿using System.Reflection;
-using SoulsFormats;
+﻿using SoulsFormats;
 
 const string regulationName = "regulation.bin";
 const string regulationPath = $@"D:\Steam\steamapps\common\ELDEN RING\Game\{regulationName}";
@@ -53,33 +52,16 @@ foreach (var row in param.Rows)
 {
     for (var i = 0; i < 8; i++)
     {
-        if (row.Cells[itemRateIndex + i].Value is <= 0)
+        if (row.Cells[itemRateIndex + i].Value is <= 0 or >= 1000)
         {
             continue;
         }
 
-        if ((int)row.Cells[itemCatIndex + i].Value == 2 && (int)row.Cells[itemIdIndex + i].Value is < 43100000 or >= 60000000)
-        {
-            if ((ushort)row.Cells[itemRateIndex + i].Value < 1000)
-            {
-                row.Cells[itemRateIndex + i].Value = (ushort)1000;
-                row.Cells[enableLuckIndex + i].Value = (ushort)0;
-                row.Cells[cumuRateIndex + i].Value = (ushort)0;
-                row.Cells[cumuResetIndex + i].Value = (ushort)0;
-                row.Cells[cumulateNumMaxIndex].Value = (byte)0;
-            }
-        }
-        else
-        {
-            if ((ushort)row.Cells[itemRateIndex + i].Value < 1000)
-            {
-                row.Cells[itemRateIndex + i].Value = (ushort)0;
-                row.Cells[enableLuckIndex + i].Value = (ushort)0;
-                row.Cells[cumuRateIndex + i].Value = (ushort)0;
-                row.Cells[cumuResetIndex + i].Value = (ushort)0;
-                row.Cells[cumulateNumMaxIndex].Value = (byte)0;
-            }
-        }
+        row.Cells[itemRateIndex + i].Value = (ushort)((int)row.Cells[itemCatIndex + i].Value == 3 ? 1000 : 0);
+        row.Cells[enableLuckIndex + i].Value = (ushort)0;
+        row.Cells[cumuRateIndex + i].Value = (ushort)0;
+        row.Cells[cumuResetIndex + i].Value = (ushort)0;
+        row.Cells[cumulateNumMaxIndex].Value = (byte)0;
     }
 }
 SetBndFile(regulation, itemLotParamName, param.Write());

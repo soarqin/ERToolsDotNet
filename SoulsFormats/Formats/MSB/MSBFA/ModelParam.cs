@@ -169,7 +169,9 @@ namespace SoulsFormats
             /// </summary>
             public Model DeepCopy()
             {
-                return (Model)MemberwiseClone();
+                var model = (Model)MemberwiseClone();
+                model.Render = Render.DeepCopy();
+                return model;
             }
             IMsbModel IMsbModel.DeepCopy() => DeepCopy();
 
@@ -292,6 +294,14 @@ namespace SoulsFormats
                     bw.WriteByte(Unk02);
                     bw.WriteByte(Unk03);
                 }
+
+                /// <summary>
+                /// Creates a deep copy of the <see cref="RenderConfig"/>.
+                /// </summary>
+                public RenderConfig DeepCopy()
+                {
+                    return (RenderConfig)MemberwiseClone();
+                }
             }
 
             #endregion
@@ -310,6 +320,11 @@ namespace SoulsFormats
                 /// Creates a <see cref="MapPiece"/> with default values.
                 /// </summary>
                 public MapPiece() : base("mXXXX") { }
+
+                /// <summary>
+                /// Creates a <see cref="MapPiece"/> with the given name.
+                /// </summary>
+                public MapPiece(string name) : base(name) { }
 
                 /// <summary>
                 /// Reads a <see cref="MapPiece"/> from a stream.
@@ -340,6 +355,11 @@ namespace SoulsFormats
                 /// Creates an <see cref="Object"/> with default values.
                 /// </summary>
                 public Object() : base("oXXXX") { }
+
+                /// <summary>
+                /// Creates an <see cref="Object"/> with the given name.
+                /// </summary>
+                public Object(string name) : base(name) { }
 
                 /// <summary>
                 /// Reads an <see cref="Object"/> from a stream.
@@ -373,6 +393,11 @@ namespace SoulsFormats
                 public Enemy() : base("eXXXX") { }
 
                 /// <summary>
+                /// Creates an <see cref="Enemy"/> with the given name.
+                /// </summary>
+                public Enemy(string name) : base(name) { }
+
+                /// <summary>
                 /// Reads an <see cref="Enemy"/> from a stream.
                 /// </summary>
                 internal Enemy(BinaryReaderEx br) : base(br) { }
@@ -401,6 +426,11 @@ namespace SoulsFormats
                 /// Creates a <see cref="Dummy"/> with default values.
                 /// </summary>
                 public Dummy() : base("aXXXX") { }
+
+                /// <summary>
+                /// Creates a <see cref="Dummy"/> with the given name.
+                /// </summary>
+                public Dummy(string name) : base(name) { }
 
                 /// <summary>
                 /// Reads a <see cref="Dummy"/> from a stream.

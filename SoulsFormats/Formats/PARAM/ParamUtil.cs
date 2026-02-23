@@ -5,7 +5,7 @@ using EditFlags = SoulsFormats.PARAMDEF.EditFlags;
 
 namespace SoulsFormats
 {
-    internal static class ParamUtil
+    public static class ParamUtil
     {
         public static string GetDefaultFormat(DefType type)
         {
@@ -225,6 +225,7 @@ namespace SoulsFormats
         {
             switch (type)
             {
+                case DefType.u8: // ACFA AcActRestrictionParam.def
                 case DefType.dummy8:
                 case DefType.fixstr:
                 case DefType.fixstrW:
@@ -239,10 +240,27 @@ namespace SoulsFormats
         {
             switch (type)
             {
+                case DefType.s8:
                 case DefType.u8:
+                case DefType.s16:
                 case DefType.u16:
+                case DefType.s32:
                 case DefType.u32:
                 case DefType.dummy8:
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        public static bool IsSignedBitType(DefType type)
+        {
+            switch (type)
+            {
+                case DefType.s8:
+                case DefType.s16:
+                case DefType.s32:
                     return true;
 
                 default:
@@ -278,7 +296,21 @@ namespace SoulsFormats
             switch (field.DisplayType)
             {
                 case DefType.s8: return Convert.ToSByte(field.Default);
-                case DefType.u8: return Convert.ToByte(field.Default);
+                case DefType.u8:
+                    byte byteDefault = Convert.ToByte(field.Default);
+                    if (field.ArrayLength > 1)
+                    {
+                        // Some dummy fields use this type
+                        var array = new byte[field.ArrayLength];
+                        for (int i = 0; i < field.ArrayLength; i++)
+                        {
+                            array[i] = byteDefault;
+                        }
+
+                        return array;
+                    }
+
+                    return byteDefault;
                 case DefType.s16: return Convert.ToInt16(field.Default);
                 case DefType.u16: return Convert.ToUInt16(field.Default);
                 case DefType.s32: return Convert.ToInt32(field.Default);
@@ -302,14 +334,19 @@ namespace SoulsFormats
 
         public static int GetBitLimit(DefType type)
         {
-            if (type == DefType.u8)
-                return 8;
-            else if (type == DefType.u16)
-                return 16;
-            else if (type == DefType.u32)
-                return 32;
-            else
-                throw new InvalidOperationException($"Bit type may only be u8, u16, or u32.");
+            switch (type)
+            {
+                case DefType.s8: return 8;
+                case DefType.u8: return 8;
+                case DefType.s16: return 16;
+                case DefType.u16: return 16;
+                case DefType.s32: return 32;
+                case DefType.u32: return 32;
+                case DefType.dummy8: return 8;
+
+                default:
+                    throw new InvalidOperationException($"Type {type} cannot be a bitfield.");
+            }
         }
     }
 }

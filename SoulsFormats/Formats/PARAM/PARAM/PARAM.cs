@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SoulsFormats
 {
@@ -58,6 +59,18 @@ namespace SoulsFormats
         /// </summary>
         public PARAMDEF AppliedParamdef { get; private set; }
 
+        /// <summary>
+        /// Whether or not rows do not support names.<br/>
+        /// This applies to Chromehounds.
+        /// </summary>
+        public bool UnnamedRows { get; set; }
+
+        /// <summary>
+        /// Whether or not rows are headerless.<br/>
+        /// This applies to Armored Core Formula Front.
+        /// </summary>
+        public bool HeaderlessRows { get; set; }
+
         private BinaryReaderEx RowReader;
 
         /// <summary>
@@ -79,53 +92,112 @@ namespace SoulsFormats
             // The strings offset in the header is highly unreliable; only use it as a last resort
             long actualStringsOffset = 0;
             long stringsOffset = br.ReadUInt32();
+            long dataStartHeader = -1;
             if (Format2D.HasFlag(FormatFlags1.Flag01) && Format2D.HasFlag(FormatFlags1.IntDataOffset) || Format2D.HasFlag(FormatFlags1.LongDataOffset))
             {
                 br.AssertInt16(0);
             }
             else
             {
-                br.ReadUInt16(); // Data start
+                dataStartHeader = br.ReadUInt16(); // Data start
             }
+
             Unk06 = br.ReadInt16();
             ParamdefDataVersion = br.ReadInt16();
             ushort rowCount = br.ReadUInt16();
+            long paramTypeOffset = 0;
             if (Format2D.HasFlag(FormatFlags1.OffsetParamType))
             {
                 br.AssertInt32(0);
-                long paramTypeOffset = br.ReadInt64();
+                paramTypeOffset = br.ReadInt64();
                 br.AssertPattern(0x14, 0x00);
-                ParamType = br.GetASCII(paramTypeOffset);
-                actualStringsOffset = paramTypeOffset;
+
+                // Check if ParamTypeOffset is invalid and longer than file.
+                if (paramTypeOffset < br.Length)
+                {
+                    ParamType = br.GetASCII(paramTypeOffset);
+                    actualStringsOffset = paramTypeOffset;
+                }
             }
             else
             {
                 ParamType = br.ReadFixStr(0x20);
             }
+
             br.Skip(4); // Format
             if (Format2D.HasFlag(FormatFlags1.Flag01) && Format2D.HasFlag(FormatFlags1.IntDataOffset))
             {
-                br.ReadInt32(); // Data start
+                dataStartHeader = br.ReadInt32(); // Data start
                 br.AssertInt32(0);
                 br.AssertInt32(0);
                 br.AssertInt32(0);
             }
             else if (Format2D.HasFlag(FormatFlags1.LongDataOffset))
             {
-                br.ReadInt64(); // Data start
+                dataStartHeader = br.ReadInt64(); // Data start
                 br.AssertInt64(0);
             }
 
-            Rows = new List<Row>(rowCount);
-            for (int i = 0; i < rowCount; i++)
-                Rows.Add(new Row(br, this, ref actualStringsOffset));
+            // Run some heuristics to detect nameless and headerless rows
+            long rowsStart = br.Position;
+            long GetRowDataOffset(long position)
+            {
+                long rowDataOffset;
+                if (Format2D.HasFlag(FormatFlags1.LongDataOffset))
+                {
+                    rowDataOffset = br.GetInt64(position + 8);
+                }
+                else
+                {
+                    rowDataOffset = br.GetUInt32(position + 4);
+                }
 
-            if (Rows.Count > 1)
-                DetectedSize = Rows[1].DataOffset - Rows[0].DataOffset;
-            else if (Rows.Count == 1)
-                DetectedSize = (actualStringsOffset == 0 ? stringsOffset : actualStringsOffset) - Rows[0].DataOffset;
+                return rowDataOffset;
+            }
+
+            // Detect if row header has no name offset
+            long rowDataOffset1 = GetRowDataOffset(rowsStart);
+            long rowsSize = rowDataOffset1 - rowsStart;
+            int rowHeaderSize = 12;
+            if (rowsSize < (rowCount * rowHeaderSize))
+            {
+                UnnamedRows = true;
+                rowHeaderSize = 8;
+            }
+
+            // Detect if rows have no header at all
+            if (dataStartHeader != -1)
+            {
+                if (rowsStart == dataStartHeader || (rowsStart + rowHeaderSize) > dataStartHeader)
+                {
+                    HeaderlessRows = true;
+                    UnnamedRows = true;
+                }
+            }
+
+            Rows = new List<Row>(rowCount);
+            if (HeaderlessRows)
+            {
+                DetectedSize = (br.Length - rowsStart) / rowCount;
+                long rowOffset = rowsStart;
+                for (int i = 0; i < rowCount; i++)
+                {
+                    Rows.Add(new Row(i, rowOffset));
+                    rowOffset += DetectedSize;
+                }
+            }
             else
-                DetectedSize = -1;
+            {
+                for (int i = 0; i < rowCount; i++)
+                    Rows.Add(new Row(br, this, ref actualStringsOffset));
+
+                if (Rows.Count > 1)
+                    DetectedSize = Rows[1].DataOffset - Rows[0].DataOffset;
+                else if (Rows.Count == 1)
+                    DetectedSize = (actualStringsOffset == 0 ? stringsOffset : actualStringsOffset) - Rows[0].DataOffset;
+                else
+                    DetectedSize = -1;
+            }
         }
 
         /// <summary>
@@ -149,7 +221,11 @@ namespace SoulsFormats
             }
             bw.WriteInt16(Unk06);
             bw.WriteInt16(ParamdefDataVersion);
+
+            if (Rows.Count > ushort.MaxValue)
+                throw new OverflowException($"Param \"{AppliedParamdef.ParamType}\" has more than {ushort.MaxValue} rows and cannot be saved.");
             bw.WriteUInt16((ushort)Rows.Count);
+
             if (Format2D.HasFlag(FormatFlags1.OffsetParamType))
             {
                 bw.WriteInt32(0);
@@ -159,7 +235,13 @@ namespace SoulsFormats
             else
             {
                 // This padding heuristic isn't completely accurate, not that it matters
-                bw.WriteFixStr(ParamType, 0x20, (byte)(Format2D.HasFlag(FormatFlags1.Flag01) ? 0x20 : 0x00));
+                byte padding = (byte)(Format2D.HasFlag(FormatFlags1.Flag01) ? 0x20 : 0x00);
+                if (HeaderlessRows)
+                {
+                    padding = 0x20;
+                }
+
+                bw.WriteFixStr(ParamType, 0x20, padding);
             }
             bw.WriteByte((byte)(BigEndian ? 0xFF : 0x00));
             bw.WriteByte((byte)Format2D);
@@ -178,8 +260,9 @@ namespace SoulsFormats
                 bw.WriteInt64(0);
             }
 
-            for (int i = 0; i < Rows.Count; i++)
-                Rows[i].WriteHeader(bw, this, i);
+            if (!HeaderlessRows)
+                for (int i = 0; i < Rows.Count; i++)
+                    Rows[i].WriteHeader(bw, this, i);
 
             // This is probably pretty stupid
             if (Format2D == FormatFlags1.Flag01)
@@ -203,10 +286,22 @@ namespace SoulsFormats
                 bw.WriteASCII(ParamType, true);
             }
 
-            for (int i = 0; i < Rows.Count; i++)
-                Rows[i].WriteName(bw, this, i);
-            // DeS and BB sometimes (but not always) include some useless padding here
+            StringOffsetDictionary = new Dictionary<string, long>()
+            {
+                {"", bw.Position}
+            };
+            if (!UnnamedRows && !HeaderlessRows)
+            {
+                bw.WriteInt16(0); // null string
+                for (int i = 0; i < Rows.Count; i++)
+                    Rows[i].WriteName(bw, this, i);
+
+                // DeS and BB sometimes (but not always) include some useless padding here
+                bw.WriteInt16(0); // useless padding at the end
+            }
         }
+
+        public Dictionary<string, long> StringOffsetDictionary;
 
         /// <summary>
         /// Interprets row data according to the given paramdef and stores it for later writing.
@@ -215,11 +310,12 @@ namespace SoulsFormats
         {
             AppliedParamdef = paramdef;
             foreach (Row row in Rows)
-                row.ReadCells(RowReader, AppliedParamdef);
+                row.ReadCells(RowReader, AppliedParamdef, ulong.MaxValue);
         }
 
         /// <summary>
-        /// Applies a paramdef only if its param type, data version, and row size match this param's. Returns true if applied.
+        /// Applies a paramdef only if its param type, data version, and row size match this param's. Returns true if
+        /// applied.
         /// </summary>
         public bool ApplyParamdefCarefully(PARAMDEF paramdef)
         {
@@ -240,6 +336,112 @@ namespace SoulsFormats
             foreach (PARAMDEF paramdef in paramdefs)
             {
                 if (ApplyParamdefCarefully(paramdef))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Applies a paramdef only if its param type, and data version match this param's. Returns true if applied.
+        /// </summary>
+        public bool ApplyParamdefSomewhatCarefully(PARAMDEF paramdef)
+        {
+            // Using headerless rows as a heuristic here may be a bad idea
+            if ((ParamType == paramdef.ParamType || string.IsNullOrEmpty(ParamType))
+                && (HeaderlessRows || (ParamdefDataVersion == paramdef.DataVersion)))
+            {
+                ApplyParamdef(paramdef);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Applies the first paramdef in the sequence whose param type, and data version match this param's, if any. Returns true if applied. 
+        /// </summary>
+        public bool ApplyParamdefSomewhatCarefully(IEnumerable<PARAMDEF> paramdefs)
+        {
+            foreach (PARAMDEF paramdef in paramdefs)
+            {
+                if (ApplyParamdefSomewhatCarefully(paramdef))
+                    return true;
+            }
+            return false;
+        }
+
+
+        /// <summary>
+        /// Interprets row data according to the given versioned paramdef and stores it for later writing.
+        /// </summary>
+        /// <param name="paramdef">The version aware paramdef to apply</param>
+        /// <param name="version">The regulation version of the param that the paramdef is being applied to</param>
+        public void ApplyRegulationVersionedParamdef(PARAMDEF paramdef, ulong version)
+        {
+            if (!paramdef.VersionAware)
+                throw new Exception("PARAMDEF must be version aware to apply with a regulation version");
+            AppliedParamdef = paramdef;
+            foreach (Row row in Rows)
+                row.ReadCells(RowReader, AppliedParamdef, version);
+        }
+
+        /// <summary>
+        /// Applies a paramdef only if its param type, and data version match this param's. Returns true if applied.
+        /// </summary>
+        public bool ApplyRegulationVersionedParamdefSomewhatCarefully(PARAMDEF paramdef, ulong version)
+        {
+            if (!paramdef.VersionAware)
+                throw new Exception("PARAMDEF must be version aware to apply with a regulation version");
+            // Using headerless rows as a heuristic here may be a bad idea
+            if ((ParamType == paramdef.ParamType || string.IsNullOrEmpty(ParamType))
+                && (HeaderlessRows || (ParamdefDataVersion == paramdef.DataVersion)))
+            {
+                ApplyRegulationVersionedParamdef(paramdef, version);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Applies the first paramdef in the sequence whose param type, and data version match this param's, if any. Returns true if applied.
+        /// </summary>
+        /// <param name="paramdefs">The version aware paramdefs to apply</param>
+        /// <param name="version">The regulation version of the param that the paramdef is being applied to</param>
+        public bool ApplyRegulationVersionedParamdefSomewhatCarefully(IEnumerable<PARAMDEF> paramdefs, ulong version)
+        {
+            foreach (PARAMDEF paramdef in paramdefs)
+            {
+                if (paramdef.VersionAware && ApplyRegulationVersionedParamdefSomewhatCarefully(paramdef, version))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Applies a versioned paramdef only if its param type, data version, and row size match this param's. Returns
+        /// true if applied.
+        /// </summary>
+        /// <param name="paramdef">The version aware paramdef to apply</param>
+        /// <param name="version">The regulation version of the param that the paramdef is being applied to</param>
+        /// <returns>True if the paramdef was applied</returns>
+        public bool ApplyRegulationVersionedParamdefCarefully(PARAMDEF paramdef, ulong version)
+        {
+            if (ParamType == paramdef.ParamType && ParamdefDataVersion == paramdef.DataVersion
+                                                && (DetectedSize == -1 || DetectedSize == paramdef.GetRowSize(version)))
+            {
+                ApplyRegulationVersionedParamdef(paramdef, version);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Applies the first paramdef in the sequence whose param type, data version, and row size match this param's, if any. Returns true if applied.
+        /// </summary>
+        public bool ApplyRegulationVersionedParamdefCarefully(IEnumerable<PARAMDEF> paramdefs, ulong version)
+        {
+            foreach (PARAMDEF paramdef in paramdefs)
+            {
+                if (paramdef.VersionAware && ApplyRegulationVersionedParamdefCarefully(paramdef, version))
                     return true;
             }
             return false;

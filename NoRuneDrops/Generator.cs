@@ -1,6 +1,7 @@
 namespace NoRuneDrops;
 
 using SoulsFormats;
+using SoulsFormats.Cryptography;
 
 public static class Generator
 {
@@ -12,7 +13,7 @@ public static class Generator
             throw new FileNotFoundException("regulation.bin not found in the game directory");
         }
         LoadDefs();
-        var regulation = SFUtil.DecryptERRegulation(regulationPath);
+        var regulation = RegulationDecryptor.DecryptERRegulation(regulationPath);
         PARAM? param = null;
         foreach (var file in regulation.Files)
         {
@@ -210,7 +211,7 @@ public static class Generator
             }
 
         }
-        SFUtil.EncryptERRegulation($"./output/regulation.bin", regulation);
+        RegulationDecryptor.EncryptERRegulation($"./output/regulation.bin", regulation);
     }
 
     private static void LoadDefs()

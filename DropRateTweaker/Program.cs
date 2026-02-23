@@ -1,4 +1,5 @@
 ﻿using SoulsFormats;
+using SoulsFormats.Cryptography; 
 
 const string regulationName = "regulation.bin";
 const string regulationPath = $@"D:\Steam\steamapps\common\ELDEN RING\Game\{regulationName}";
@@ -8,7 +9,7 @@ List<PARAMDEF> paramDefs;
 PARAM? param = null;
 
 LoadDefs();
-var regulation = SFUtil.DecryptERRegulation(regulationPath);
+var regulation = RegulationDecryptor.DecryptERRegulation(regulationPath);
 foreach (var file in regulation.Files)
 {
     var filename = Path.GetFileName(file.Name);
@@ -65,7 +66,7 @@ foreach (var row in param.Rows)
     }
 }
 SetBndFile(regulation, itemLotParamName, param.Write());
-SFUtil.EncryptERRegulation($"./output/{regulationName}", regulation);
+RegulationDecryptor.EncryptERRegulation($"./output/{regulationName}", regulation);
 
 return;
 
